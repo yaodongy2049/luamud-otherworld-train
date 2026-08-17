@@ -1,0 +1,31 @@
+[Unit]
+Description=LuaMUD HTTPS Agent API
+After=network-online.target luamud.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luamudagent
+Group=luamudagent
+WorkingDirectory=/opt/luamud-agent
+Environment=PYTHONUNBUFFERED=1
+Environment=LUAMUD_AGENT_HOST=127.0.0.1
+Environment=LUAMUD_AGENT_PORT=8808
+Environment=LUAMUD_HOST=127.0.0.1
+Environment=LUAMUD_PORT=7777
+Environment=LUAMUD_AGENT_TOKEN_FILE=/etc/luamud-agent/token
+ExecStart=/usr/bin/python3 /opt/luamud-agent/luamud_agent_api.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/luamud-agent
+ReadWritePaths=/var/lib/luamud-agent
+RuntimeDirectory=luamud-agent
+RuntimeDirectoryMode=0750
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

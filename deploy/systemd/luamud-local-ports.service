@@ -1,0 +1,13 @@
+[Unit]
+Description=Restrict LuaMUD implementation ports to loopback
+After=network-pre.target
+Before=luamud.service luamud-websocket.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/luamud-local-ports.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>LuaMUD · 通往异世界的列车</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; min-height: 100vh; background: #0b0d10; color: #d7dee9; font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    main { width: min(100%, 980px); height: 100dvh; min-height: 0; margin: 0 auto; padding: 14px 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 12px; }
+    header { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #26313e; padding-bottom: 10px; }
+    h1 { flex: 1; margin: 0; font-size: 18px; color: #e6c470; }
+    #status { font-size: 13px; color: #98a7bb; }
+    #follow-toggle { padding: 7px 10px; border: 1px solid #47586a; border-radius: 6px; background: #11161c; color: #d7dee9; font: inherit; font-size: 12px; cursor: pointer; }
+    #follow-toggle[aria-pressed="true"] { border-color: #e6c470; color: #e6c470; }
+    #terminal { min-height: 0; margin: 0; padding: 16px; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #26313e; border-radius: 8px; background: #11161c; color: #d7dee9; }
+    #context-card { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 9px 11px; border: 1px solid #33475d; border-radius: 8px; background: #101b26; color: #b9c9d8; font-size: 13px; }
+    #context-card[hidden] { display: none; }
+    #context-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    #context-actions button { padding: 6px 10px; border: 1px solid #6c92b3; border-radius: 5px; background: #183047; color: #e2effa; font-size: 13px; font-weight: 600; }
+    form { display: flex; gap: 10px; }
+    label { display: none; }
+    input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid #47586a; border-radius: 6px; background: #11161c; color: #f2f6fb; font: inherit; }
+    button { padding: 12px 18px; border: 0; border-radius: 6px; background: #e6c470; color: #16110a; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled, input:disabled { opacity: .55; cursor: not-allowed; }
+    .hint { margin: 0; color: #98a7bb; font-size: 13px; }
+    code { color: #e6c470; }
+    @media (max-width: 640px) {
+      main { padding: 10px; gap: 9px; }
+      header { flex-wrap: wrap; }
+      h1 { min-width: 100%; }
+      #terminal { padding: 12px; }
+      form { gap: 7px; }
+      button { padding-inline: 12px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>LuaMUD · 《通往异世界的列车》</h1>
+    <span id="status">正在连接…</span>
+    <button id="follow-toggle" type="button" aria-pressed="false" disabled>暂停自动滚动</button>
+  </header>
+  <pre id="terminal" aria-live="polite"></pre>
+  <section id="context-card" aria-live="polite" hidden>
+    <span>场景建议：</span>
+    <div id="context-actions"></div>
+  </section>
+  <form id="command-form" autocomplete="off">
+    <label for="command">游戏命令</label>
+    <input id="command" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入用户名或游戏命令；例如 help、look、go north" disabled>
+    <button id="send" type="submit" disabled>发送</button>
+  </form>
+  <p class="hint">首次进入：输入用户名；密码会以掩码输入且不会回显到终端。传统命令可用 <code>help</code>、<code>look</code>、<code>go north</code>、<code>say</code>、<code>inv</code>、<code>save</code>、<code>bye</code>。</p>
+</main>
+<script>
+(() => {
+  const terminal = document.getElementById('terminal');
+  const form = document.getElementById('command-form');
+  const input = document.getElementById('command');
+  const button = document.getElementById('send');
+  const status = document.getElementById('status');
+  const followToggle = document.getElementById('follow-toggle');
+  const contextCard = document.getElementById('context-card');
+  const contextActions = document.getElementById('context-actions');
+  const decoder = new TextDecoder('utf-8');
+  const encoder = new TextEncoder();
+  const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${wsScheme}://${location.host}/luamud/ws`);
+  ws.binaryType = 'arraybuffer';
+  let autoFollow = true;
+  let promptBuffer = '';
+
+  function setAutoFollow(enabled) {
+    autoFollow = enabled;
+    followToggle.setAttribute('aria-pressed', String(!enabled));
+    followToggle.textContent = enabled ? '暂停自动滚动' : '恢复自动滚动';
+    if (enabled) terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  function setInputMode(mode) {
+    const isPassword = mode === 'password';
+    input.type = isPassword ? 'password' : 'text';
+    input.placeholder = isPassword ? '请输入游戏密码（不会回显）' : '输入用户名或游戏命令；例如 help、look、go north';
+  }
+
+  function inferInputMode(text) {
+    // WebSocket output can be fragmented. Keep a short rolling prompt buffer so
+    // that login success/password prompts are recognized even across frames.
+    promptBuffer = (promptBuffer + text).slice(-768);
+    // Explicit password prompts take precedence over earlier login-success
+    // text that may still exist in the rolling buffer during account creation.
+    if (/请创建用户[^\n]{0,80}设置密码|请再次输入密码|请输入密码[：:]?/.test(promptBuffer)) {
+      setInputMode('password');
+      return;
+    }
+    if (/错误的用户名或密码|请输入用户名|登录成功|创建成功|再见/.test(promptBuffer)) {
+      setInputMode('text');
+    }
+  }
+
+  function sendCommand(rawValue) {
+    const value = rawValue.trim();
+    if (!value || ws.readyState !== WebSocket.OPEN) return;
+    const wasPassword = input.type === 'password';
+    append(`> ${wasPassword ? '••••••••' : value}\n`);
+    ws.send(encoder.encode(value + '\n'));
+    input.value = '';
+    // A password has just been sent. Default back to normal command mode now;
+    // an explicit server confirmation-password prompt will immediately switch it
+    // back to password mode. This prevents ordinary commands being masked after
+    // a fragmented or delayed login-success message.
+    if (wasPassword) {
+      promptBuffer = '';
+      setInputMode('text');
+    }
+    input.focus();
+  }
+
+  function setContextCommands(commands) {
+    const unique = [...new Set(commands.map((item) => item.trim()).filter(Boolean))].slice(0, 3);
+    contextActions.replaceChildren();
+    if (!unique.length) {
+      contextCard.hidden = true;
+      return;
+    }
+    unique.forEach((command) => {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.textContent = command;
+      action.addEventListener('click', () => sendCommand(command));
+      contextActions.append(action);
+    });
+    contextCard.hidden = false;
+  }
+
+  function inferContextCommands(text) {
+    const commands = [];
+    const hintPattern = /【操作提示】[^\n]*输入：\s*\n?([^\n]+)/g;
+    for (const match of text.matchAll(hintPattern)) commands.push(match[1]);
+    if (/你需要潜行通过/.test(text)) commands.push('perform 潜行');
+    if (/尝试逃离战斗|逃跑指令/.test(text)) commands.push('flee');
+    if (commands.length) setContextCommands(commands);
+    if (/登录成功|再见|浑身酸软.*醒来/.test(text)) setContextCommands([]);
+  }
+
+  function stripTelnet(bytes) {
+    const out = [];
+    for (let i = 0; i < bytes.length; i += 1) {
+      if (bytes[i] !== 255) {
+        out.push(bytes[i]);
+        continue;
+      }
+      const command = bytes[i + 1];
+      if (command === 255) {
+        out.push(255);
+        i += 1;
+      } else if (command === 250) {
+        i += 2;
+        while (i < bytes.length - 1 && !(bytes[i] === 255 && bytes[i + 1] === 240)) i += 1;
+        i += 1;
+      } else {
+        i += (command >= 251 && command <= 254) ? 2 : 1;
+      }
+    }
+    return new Uint8Array(out);
+  }
+
+  function append(value) {
+    const text = value instanceof ArrayBuffer ? decoder.decode(stripTelnet(new Uint8Array(value))) : String(value);
+    const clean = text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+    terminal.textContent += clean;
+    inferInputMode(clean);
+    inferContextCommands(clean);
+    if (autoFollow) terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  terminal.addEventListener('scroll', () => {
+    const nearBottom = terminal.scrollTop + terminal.clientHeight >= terminal.scrollHeight - 24;
+    if (!nearBottom && autoFollow) setAutoFollow(false);
+    if (nearBottom && !autoFollow) setAutoFollow(true);
+  });
+  followToggle.addEventListener('click', () => setAutoFollow(!autoFollow));
+
+  ws.onopen = () => {
+    status.textContent = location.protocol === 'https:' ? '已安全连接' : '已连接';
+    input.disabled = false;
+    button.disabled = false;
+    followToggle.disabled = false;
+    input.focus();
+  };
+  ws.onmessage = (event) => append(event.data);
+  ws.onerror = () => { status.textContent = '连接错误'; };
+  ws.onclose = () => {
+    status.textContent = '连接已断开；刷新页面可重连';
+    input.disabled = true;
+    button.disabled = true;
+    followToggle.disabled = true;
+  };
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    sendCommand(input.value);
+  });
+})();
+</script>
+</body>
+</html>

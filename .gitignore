@@ -1,0 +1,35 @@
+# Lua runtime and editor artifacts
+*.luac
+.vscode/
+.idea/
+.DS_Store
+
+# Player data and runtime state
+data/
+players/
+*.save
+*.log
+logs/
+tmp/
+run/
+
+# Credentials and certificates
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+tokens/
+agent-token*
+
+# Deployment-local copies and backups
+backups/
+deploy/local/
+
+# Python cache
+__pycache__/
+*.py[cod]

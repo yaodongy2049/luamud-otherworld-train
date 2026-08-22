@@ -127,12 +127,74 @@ local function run_avg_cmd(this_player, cmds)
   return true
 end
 
+---将命令字符串拆分为普通命令数组；动作提示只能登记已注册的普通命令。
+local function split_normal_command(cmd)
+  if type(cmd) ~= "string" or cmd == "" then
+    return nil
+  end
+  local parts = {}
+  for part in string.gmatch(cmd, "%S+") do
+    table.insert(parts, part)
+  end
+  if #parts == 0 or not command_list[string.lower(parts[1])] then
+    return nil
+  end
+  return parts
+end
+
+---取得与当前房间绑定的作者动作提示别名表。
+local function get_action_hint_aliases(player, create)
+  if not player or not player.environment or not player.environment.id then
+    return nil
+  end
+  player.temp_status = player.temp_status or {}
+  local aliases = player.temp_status.action_hint_aliases
+  if aliases and aliases.room_id == player.environment.id then
+    return aliases
+  end
+  if not create then
+    return nil
+  end
+  aliases = { room_id = player.environment.id, values = {} }
+  player.temp_status.action_hint_aliases = aliases
+  return aliases
+end
+
+---登记当前房间展示给玩家的中文动作提示。它不是自由文本执行器：只映射到已注册普通命令。
+local function register_action_hint(player, label, cmd)
+  local aliases = get_action_hint_aliases(player, true)
+  local parts = split_normal_command(cmd)
+  if aliases and parts and type(label) == "string" and label ~= "" then
+    aliases.values[label] = parts
+  end
+end
+
+---把玩家输入的精确中文提示还原为作者提供的普通命令；房间切换后自动失效。
+local function resolve_action_hint(player, cmds)
+  local aliases = get_action_hint_aliases(player, false)
+  if not aliases or type(cmds) ~= "table" then
+    return nil
+  end
+  local label = table.concat(cmds, " ")
+  local mapped = aliases.values[label]
+  if not mapped then
+    return nil
+  end
+  local copied = {}
+  for index, value in ipairs(mapped) do
+    copied[index] = value
+  end
+  return copied
+end
+
 ---显示操作提示
 ---@param player Player 玩家对象
 ---@param hint string 提示文本（不含"【操作提示】"前缀）
 ---@param cmd string 普通模式下的命令
 ---@param llm_cmd string LLM模式下的命令
 local function show_action_hint(player, hint, cmd, llm_cmd)
+  -- 无论当前是否启用 LLM，均登记与房间绑定的确定性别名；这使可见中文提示无需猜测对象内部 ID。
+  register_action_hint(player, llm_cmd, cmd)
   player:reply("【操作提示】" .. hint .. "，输入：")
   local msg = log.COLORS.GREEN .. cmd .. log.COLORS.RESET
   if IS_LLM_ENABLED then
@@ -218,6 +280,12 @@ local function normal_handler(user_id, cmds)
     return true
   end
 
+  -- 玩家可见的房间动作提示优先确定性还原为作者指定的普通命令，避免模型猜测对象内部 ID。
+  local hinted_cmds = resolve_action_hint(this_player, cmds)
+  if hinted_cmds then
+    cmds = hinted_cmds
+  end
+
   -- 特殊命令 unknown 处理
   local input_str = table.concat(cmds, " ")
   if input_str == "unknown" then
@@ -280,5 +348,6 @@ return {
   normal_handler = normal_handler,
   exit_dialog_mode = exit_dialog_mode,
   show_action_hint = show_action_hint,
+  resolve_action_hint = resolve_action_hint,
   prompt = prompt,
 }

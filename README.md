@@ -105,7 +105,7 @@ sh/sh/start.sh
 
 本仓库的 `tools/openrouter_bridge/` 提供一个**仅绑定到服务器回环地址**的 Ollama 协议适配器。它让 LuaMUD 保持原有的本机 `/api/chat` 与 `/api/generate` 调用方式，同时由侧车使用服务器私有的 OpenRouter key 访问固定模型。该 key 不进入 LuaMUD、仓库、日志或网页端。
 
-LLM 默认关闭。启用后，普通玩家命令会优先按现有规则执行；只有无法识别的自然语言输入才会进入模型解释。模型每次只能提出一个白名单内的普通玩家命令，LuaMUD 会再次进行最终验证。完整的架构、限额、部署、回滚和网页测试说明见：[OpenRouter LLM 侧车](docs/architecture/openrouter_llm_bridge.md)。
+LLM 默认关闭。启用后，普通玩家命令会优先按现有规则执行；只有无法识别的自然语言输入才会进入模型解释。模型每次只能提出一个白名单内的普通玩家命令，LuaMUD 会再次进行最终验证。房间作者展示的中文操作提示（例如“看示意图”“问问玛拉”“读便签”）会在**当前房间内**确定性还原为对应普通命令，不需要模型猜测内部对象 ID；离开房间后该别名自动失效。完整的架构、限额、部署、回滚和网页测试说明见：[OpenRouter LLM 侧车](docs/architecture/openrouter_llm_bridge.md)。
 
 ## 仓库结构
 

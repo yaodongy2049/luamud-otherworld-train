@@ -2,6 +2,12 @@
 
 本仓库为基于 [wadehan/luamud](https://gitee.com/wadehan/luamud) 的修改版。上游采用 MIT License；完整归属见 [UPSTREAM_ATTRIBUTION.md](UPSTREAM_ATTRIBUTION.md)。
 
+## 车厢动作提示别名修复 — 2026-08-23
+
+- 修复 6 号车厢在 LLM 模式下展示“看示意图、问问玛拉、读便签”，但底层对象仅接受 `train_map`、`mara_vane`、`mysterious_note` 的脱节。
+- 作者调用 `show_action_hint` 时会为**当前房间**登记中文提示到已注册普通命令的确定性别名；别名进入模型前即完成还原，离开房间自动失效，不能登记 GM、开发或动态脚本命令。
+- 新增 Lua 单元测试、常暗之厢场景回归与真实玩家正常入车流程探针，覆盖售票员提示、示意图、玛拉与便签三条路径。
+
 ## OpenRouter LLM Bridge — 2026-08-23
 
 ### 受限自然语言命令理解

@@ -300,6 +300,32 @@ return function(TF)
         TF.assert_output_contains(c, "3号车厢的电路开关", "乘务员应看到电路开关位置提示")
     end)
 
+    -- 测试11: 玩家可见中文提示应映射到当前车厢的真实对象/对话键
+    TF.run_test("常暗之厢-中文动作提示别名", function()
+        cleanup_compartment_state()
+        local c = TF.register_user("dc_c6hint_" .. os.time())
+        local player = get_player(c)
+        set_player_job(player, "乘务员")
+        fly_player_to(c, "Compartment6")
+        TF.drain_pending_timers()
+
+        TF.send(c, "look")
+        c:clear_output()
+        TF.send(c, "看示意图")
+        TF.assert_output_contains(c, "3号车厢的电路开关", "中文示意图提示应执行 look train_map")
+
+        c:clear_output()
+        TF.send(c, "问问玛拉")
+        TF.assert_output_contains(c, "SAN", "中文玛拉提示应执行 say 理智 mara_vane")
+
+        TF.send(c, "look")
+        TF.send(c, "get mysterious_note")
+        TF.send(c, "look")
+        c:clear_output()
+        TF.send(c, "读便签")
+        TF.assert_output_contains(c, "只管前进吧", "中文便签提示应执行 look mysterious_note")
+    end)
+
     -- ========================================
     -- 第四部分：5号车厢（过渡车厢）测试
     -- ========================================

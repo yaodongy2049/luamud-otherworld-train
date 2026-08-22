@@ -1,0 +1,26 @@
+[Unit]
+Description=LuaMUD loopback-only OpenRouter to Ollama protocol bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luamudbridge
+Group=luamudbridge
+WorkingDirectory=/opt/luamud-openrouter-bridge
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/luamud-openrouter-bridge/openrouter.env
+ExecStart=/usr/bin/python3 /opt/luamud-openrouter-bridge/bridge.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/luamud-openrouter-bridge
+RuntimeDirectory=luamud-openrouter-bridge
+RuntimeDirectoryMode=0750
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

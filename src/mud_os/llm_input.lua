@@ -467,7 +467,11 @@ local function test()
     end
 end
 
-test()
+-- 旧版灯光自测面向本地 Ollama 的示例函数；生产命令侧车不应在模块加载时
+-- 自动调用它，更不能让它改变全局 LLM 开关。需要排查旧示例时再显式启用。
+if os.getenv("LUAMUD_RUN_LEGACY_LLM_SELF_TEST") == "true" then
+    test()
+end
 
 return {
     invoke_llm_chat = invoke_llm_chat,

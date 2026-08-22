@@ -2,6 +2,22 @@
 
 本仓库为基于 [wadehan/luamud](https://gitee.com/wadehan/luamud) 的修改版。上游采用 MIT License；完整归属见 [UPSTREAM_ATTRIBUTION.md](UPSTREAM_ATTRIBUTION.md)。
 
+## OpenRouter LLM Bridge — 2026-08-23
+
+### 受限自然语言命令理解
+
+- 新增可选的、仅回环监听的 OpenRouter—Ollama 协议侧车；LuaMUD 保持现有本机 `/api/chat` 与 `/api/generate` 调用，侧车负责 HTTPS、Bearer 鉴权、固定模型、超时、单并发和每日调用限额。
+- 新增 Lua 侧最终安全验证：模型每次只能提出一个普通玩家命令，且经动作白名单、逐命令参数上限、文本长度与控制字符检查后才会执行。
+- 明确拒绝 GM 命令、开发者控制台、动态剧情函数、多命令链、任意 Lua 与服务器/文件操作；模型没有直接世界写入或运维权限。
+- 将旧版 Ollama 灯光示例自测改为显式诊断开关，防止模块加载时改变全局 LLM 状态。
+- 将不兼容的 Ollama embedding 语义匹配与聊天侧车解耦；命令侧车启用时该路径默认关闭，避免启动阶段误调用不存在的 embedding 端点。
+
+### 验证与文档
+
+- 新增 `sh/test_llm_bridge.sh`、Python 协议测试、Lua 命令安全测试、embedding 隔离测试与启动期自测保护测试。
+- 新增生产私有环境中的真实回环集成探针和游戏会话探针，用于验证 `向东走 → go east` 与自然语言观察的端到端流程。
+- 新增 [OpenRouter LLM 侧车架构说明](docs/architecture/openrouter_llm_bridge.md)，覆盖网络隔离、私有凭据、资源上限、回滚和网页测试方法。
+
 ## Otherworld Train Edition — 2026-08
 
 ### 剧本与玩家体验

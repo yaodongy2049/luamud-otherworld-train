@@ -18,6 +18,12 @@ local base_data = {}
 local http_connection = nil
 local url_parts = url.parse(OLLAMA_HOST)
 local http_host, http_port = url_parts.host or "127.0.0.1", url_parts.port or 11434
+
+-- OpenRouter 命令解释侧车只兼容聊天/生成接口，不兼容 Ollama embedding。
+-- 只有单独配置了兼容 embedding 后端时才允许语义匹配访问该路径。
+local function semantic_is_enabled()
+    return IS_LLM_ENABLED and IS_SEMANTIC_MATCH_ENABLED
+end
 -- ================================================
 
 -- 创建或复用 HTTP 连接
@@ -104,7 +110,7 @@ end
 
 ---预加载知识库向量
 local function preload_base_emb()
-    if not IS_LLM_ENABLED then
+    if not semantic_is_enabled() then
         return
     end
     local total = #base_data
@@ -167,6 +173,9 @@ end
 ---@param options string[] 可选的匹配目标，用于筛选结果，注意这里的字符串必须都被提前add_match_src()缓存过
 ---@return string? #匹配命中的字符串，若无匹配则返回 nil
 local function best_match(query, options)
+    if not semantic_is_enabled() then
+        return nil
+    end
     local results = semantic_match_all(query, options)
     if #results > 0 and results[1].sim >= SIM_THRESHOLD then
         log.DEBUG(string.format("best_match: %s -> %s, sim=%.4f", query, results[1].text, results[1].sim))
@@ -185,8 +194,8 @@ end
 
 -- ===================== 测试 =====================
 local function test()
-    if not IS_LLM_ENABLED then
-        log.INFO("LLM 未启用，跳过语义匹配测试")
+    if not semantic_is_enabled() then
+        log.INFO("语义匹配未启用，跳过 embedding 测试")
         return
     end
     log.INFO("开始测试语义匹配...")

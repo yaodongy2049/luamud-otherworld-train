@@ -3,10 +3,17 @@ LuaMudOS v0.1 by 1740168@qq.com
 It's a simple MUD server for study LUA
 ]]
 
--- 设置全局配置
-IS_LLM_ENABLED = false                            ---是否开启大模型服务
-OLLAMA_HOST    = "http://127.0.0.1:11434"        ---ollama主机地址
-LLM_MODEL      = "qwen2.5:7b-instruct-q3_K_M"    ---当前使用的大模型名称
+-- 设置全局配置。LLM 默认关闭；生产环境仅通过 systemd 私有环境文件启用。
+local function env_enabled(name)
+  local value = os.getenv(name)
+  return value == "1" or value == "true" or value == "TRUE"
+end
+
+IS_LLM_ENABLED = env_enabled("LUAMUD_LLM_ENABLED")
+-- 命令解释侧车不提供 Ollama embedding；语义向量匹配需单独的兼容后端才可开启。
+IS_SEMANTIC_MATCH_ENABLED = env_enabled("LUAMUD_SEMANTIC_MATCH_ENABLED")
+OLLAMA_HOST    = os.getenv("LUAMUD_LLM_BRIDGE_URL") or "http://127.0.0.1:11435"
+LLM_MODEL      = os.getenv("LUAMUD_LLM_MODEL") or "openrouter-bridge"
 EMB_MODEL      = "quentinz/bge-base-zh-v1.5"     ---当前使用的向量模型名称
 MUD_LIB_PATH   = MUD_LIB_PATH or "./src/mud_lib/" ---MudLib的路径
 PLAYER_CLASS   = "mud_lib/chars/investigator"     ---默认玩家类（调查员）

@@ -27,8 +27,9 @@ tokens/
 agent-token*
 
 # Deployment-local copies and backups
-backups/
 deploy/local/
+deploy/env/*.env
+!deploy/env/*.env.example
 
 # Python cache
 __pycache__/

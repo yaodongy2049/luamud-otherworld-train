@@ -27,6 +27,7 @@
 | 多玩家基础 | 将书店《暴风之眼》的发现/阅读状态改为每位玩家独立，避免共享书架阻塞其他玩家。 |
 | 失败前进 | 3 号车厢的侦查、潜行和逃跑会给出替代行动；第二次侦查确保发现关键开关。 |
 | Agent 接口 | 提供可选的、本机监听的 HTTPS Agent API 代码与服务定义，可让 AI Agent 用受控令牌进行完整游戏会话与回归测试。 |
+| 受限 LLM 命令理解 | 提供可选的回环 OpenRouter—Ollama 协议侧车。模型仅可提出一个经过 Lua 白名单验证的普通玩家命令或短叙事，不可执行 Lua、GM 命令、文件/服务器操作或多命令链。 |
 
 更详细的代码/体验改动见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/changes/P0_案件基础设施改造报告.md](docs/changes/P0_案件基础设施改造报告.md)。
 
@@ -100,6 +101,12 @@ sh/sh/start.sh
 
 具体文件见 `tools/agent_api/` 与 `deploy/`。不要把真实玩家密码、私钥、证书、玩家存档或令牌提交到仓库。
 
+## 可选：受限 OpenRouter 自然语言命令理解
+
+本仓库的 `tools/openrouter_bridge/` 提供一个**仅绑定到服务器回环地址**的 Ollama 协议适配器。它让 LuaMUD 保持原有的本机 `/api/chat` 与 `/api/generate` 调用方式，同时由侧车使用服务器私有的 OpenRouter key 访问固定模型。该 key 不进入 LuaMUD、仓库、日志或网页端。
+
+LLM 默认关闭。启用后，普通玩家命令会优先按现有规则执行；只有无法识别的自然语言输入才会进入模型解释。模型每次只能提出一个白名单内的普通玩家命令，LuaMUD 会再次进行最终验证。完整的架构、限额、部署、回滚和网页测试说明见：[OpenRouter LLM 侧车](docs/architecture/openrouter_llm_bridge.md)。
+
 ## 仓库结构
 
 ```text
@@ -108,7 +115,9 @@ web/                 浏览器终端客户端
 docs/player/         玩家说明
 docs/changes/        改动与体验文档
 tools/agent_api/     可选 AI Agent API 与客户端
-deploy/              Nginx、systemd 和端口隔离示例
+tools/openrouter_bridge/  可选、本机回环的 OpenRouter—Ollama 协议适配器
+deploy/              Nginx、systemd、端口隔离和无密钥环境模板
+docs/architecture/   LLM 侧车的架构、限额、部署和回滚说明
 tests/               上游及本修改版可扩展的测试框架
 ```
 

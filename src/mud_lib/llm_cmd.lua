@@ -5,6 +5,7 @@ local network    = require("mud_os/network")
 local invoke_llm = require("mud_lib/invoke_llm")
 local cmd_sys    = require("mud_lib/cmds")
 local login      = require("mud_lib/login")
+local llm_safety = require("mud_lib/llm_safety")
 
 ---获取房间的 avg_cmds 描述
 ---@param user_id string 用户ID
@@ -132,7 +133,8 @@ end
 ---@param user_id string 回调上下文，用户ID
 ---@return boolean #是否成功解析
 local process_parse_result = function(results, user_id, exec_cmd)
-    if not results or #results.results == 0 then
+    local safe_result = llm_safety.validate_command_result(results)
+    if not safe_result then
         network.TcpServer:send_to(user_id, "你手足无措，茫然若失。")
         local this_player = login.session_pool[user_id]
         if this_player then
@@ -140,48 +142,22 @@ local process_parse_result = function(results, user_id, exec_cmd)
         end
         return false
     end
-    for _, call in ipairs(results.results) do
-        local is_format_err = false
-        if type(call.func) ~= "string" then
-            is_format_err = true
-            break
-        end
 
-        local args = call.args or {}
-        if type(args) ~= "table" then
-            is_format_err = true
-            break
-        end
+    local call = safe_result.results[1]
+    local cmd_arr = { call.func }
+    for i = 1, #call.args do
+        cmd_arr[#cmd_arr + 1] = call.args[i]
+    end
 
-        if is_format_err then
-            goto continue
+    log.DEBUG("执行已验证的大模型解析：" .. table.concat(cmd_arr, " "))
+    local has_cmd = exec_cmd(user_id, cmd_arr)
+    if not has_cmd then
+        network.TcpServer:send_to(user_id, "你稍显迟疑，感觉无法作出这个动作。")
+        local this_player = login.session_pool[user_id]
+        if this_player then
+            this_player:send_prompt()
         end
-
-        -- 检查args中的每个元素是否为字符串
-        for i, arg in ipairs(args) do
-            if not arg or arg == "" or type(arg) ~= "string" then
-                args[i] = ""
-            end
-        end
-
-        local cmd_arr = { call.func }
-        if call.args then
-            for i = 1, #call.args do
-                cmd_arr[#cmd_arr + 1] = call.args[i]
-            end
-        end
-
-        log.DEBUG("执行大模型解析：" .. table.concat(cmd_arr, " "))
-        local has_cmd = exec_cmd(user_id, cmd_arr)
-        if not has_cmd then
-            network.TcpServer:send_to(user_id, "你稍显迟疑，感觉无法作出这个动作。")
-            local this_player = login.session_pool[user_id]
-            if this_player then
-                this_player:send_prompt()
-            end
-            break
-        end
-        ::continue::
+        return false
     end
     return true
 end
@@ -193,6 +169,11 @@ end
 ---@return boolean #是否成功处理此命令
 local function try_llm_cmd(cmds, user_id)
     if not IS_LLM_ENABLED then
+        return false
+    end
+    local active_player = login.session_pool[user_id]
+    if active_player and active_player.temp_status and active_player.temp_status.dev_mode then
+        -- 开发者控制台属于高权限路径，禁止让模型参与解释或生成命令。
         return false
     end
     local cmd_str = table.concat(cmds, " ")
